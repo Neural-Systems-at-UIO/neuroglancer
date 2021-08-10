@@ -38,6 +38,7 @@ import {stableStringify} from 'neuroglancer/util/json';
 import {Uint64} from 'neuroglancer/util/uint64';
 import {encodeZIndexCompressed} from 'neuroglancer/util/zorder';
 import {registerSharedObject} from 'neuroglancer/worker_rpc';
+import { Url } from 'neuroglancer/util/url';
 
 const shardingHashFunctions: Map<ShardingHashFunction, (out: Uint64) => void> = new Map([
   [
@@ -244,9 +245,11 @@ chunkDecoders.set(VolumeChunkEncoding.COMPRESSED_SEGMENTATION, decodeCompressedS
         // computeChunkBounds.
         let chunkPosition = this.computeChunkBounds(chunk);
         let chunkDataSize = chunk.chunkDataSize!;
-        url = `${parameters.url}/${chunkPosition[0]}-${chunkPosition[0] + chunkDataSize[0]}_` +
+        url = Url.parse(parameters.url).joinPath(
+            `${chunkPosition[0]}-${chunkPosition[0] + chunkDataSize[0]}_` +
             `${chunkPosition[1]}-${chunkPosition[1] + chunkDataSize[1]}_` +
-            `${chunkPosition[2]}-${chunkPosition[2] + chunkDataSize[2]}`;
+            `${chunkPosition[2]}-${chunkPosition[2] + chunkDataSize[2]}`
+        ).raw
       }
       response = await cancellableFetchOk(url, {}, responseArrayBuffer, cancellationToken);
     } else {

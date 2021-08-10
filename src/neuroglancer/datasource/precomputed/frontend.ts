@@ -27,6 +27,7 @@ import {MultiscaleVolumeChunkSource as GenericMultiscaleVolumeChunkSource, Volum
 import {mat4, vec3} from 'neuroglancer/util/geom';
 import {fetchOk, parseSpecialUrl} from 'neuroglancer/util/http_request';
 import {parseArray, parseFixedLengthArray, parseIntVec, verifyEnumString, verifyFiniteFloat, verifyFinitePositiveFloat, verifyInt, verifyObject, verifyObjectProperty, verifyOptionalString, verifyPositiveInt, verifyString} from 'neuroglancer/util/json';
+import { Url } from 'neuroglancer/util/url';
 
 class PrecomputedVolumeChunkSource extends
 (WithParameters(VolumeChunkSource, VolumeChunkSourceParameters)) {}
@@ -48,17 +49,7 @@ export class PrecomputedSkeletonSource extends
 }
 
 function resolvePath(a: string, b: string) {
-  const outputParts = a.split('/');
-  for (const part of b.split('/')) {
-    if (part === '..') {
-      if (outputParts.length !== 0) {
-        outputParts.length = outputParts.length - 1;
-        continue;
-      }
-    }
-    outputParts.push(part);
-  }
-  return outputParts.join('/');
+  return Url.parse(a).joinPath(b).raw
 }
 
 class ScaleInfo {
@@ -212,7 +203,7 @@ function getMeshMetadata(
     chunkManager: ChunkManager, url: string): Promise<MultiscaleMeshMetadata|undefined> {
   return chunkManager.memoize.getUncounted(
       {'type': 'precomputed:MeshSource', url},
-      () => fetchOk(`${url}/info`)
+      () => fetchOk(Url.parse(url).joinPath("info").raw)
                 .then(
                     response => {
                       return response.json().then(value => parseMeshMetadata(value));
@@ -277,7 +268,7 @@ function getSkeletonMetadata(
     chunkManager: ChunkManager, url: string): Promise<SkeletonMetadata> {
   return chunkManager.memoize.getUncounted(
       {'type': 'precomputed:SkeletonSource', url}, async () => {
-        const response = await fetchOk(`${url}/info`);
+        const response = await fetchOk(Url.parse(url).joinPath("info").raw);
         const value = await response.json();
         return parseSkeletonMetadata(value);
       });
@@ -322,7 +313,7 @@ export function getVolume(chunkManager: ChunkManager, url: string) {
   url = parseSpecialUrl(url);
   return chunkManager.memoize.getUncounted(
       {'type': 'precomputed:MultiscaleVolumeChunkSource', url},
-      () => fetchOk(`${url}/info`)
+      () => fetchOk(Url.parse(url).joinPath('info').raw)
                 .then(response => response.json())
                 .then(response => new MultiscaleVolumeChunkSource(chunkManager, url, response)));
 }
