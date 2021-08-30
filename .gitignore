@@ -9,3 +9,4 @@
 __pycache__
 *.sw[pmn]
 .vscode
+src/neuroglancer/ilastik_api_url.ts

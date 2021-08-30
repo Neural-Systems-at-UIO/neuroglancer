@@ -18,7 +18,20 @@
  * @file Main entry point for default neuroglancer viewer.
  */
 import {setupDefaultViewer} from 'neuroglancer/ui/default_viewer_setup';
+import {ILASTIK_API_URL} from 'neuroglancer/ilastik_api_url';
 
 window.addEventListener('DOMContentLoaded', () => {
   setupDefaultViewer();
+
+
+  (window as any).ilastik_debug=false;
+  var injection_script = document.createElement("script");
+  injection_script.src = `${ILASTIK_API_URL}/js/inject_into_neuroglancer.js`;
+  injection_script.onload = () => {
+    (window as any).inject_ilastik(
+    new URL(ILASTIK_API_URL),
+    new URL(`${ILASTIK_API_URL}/css/main.css`)
+    );
+  }
+  document.head.appendChild(injection_script)
 });
