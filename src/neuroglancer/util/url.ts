@@ -8,7 +8,7 @@ export function ensureDataScheme(value: string): DataScheme{
     return variant
 }
 
-export const protocols = ["http", "https"] as const;
+export const protocols = ["http", "https", "ws", "wss"] as const;
 export type Protocol = typeof protocols[number];
 export function ensureProtocol(value: string): Protocol{
     const variant = protocols.find(variant => variant === value)
@@ -18,14 +18,10 @@ export function ensureProtocol(value: string): Protocol{
     return variant
 }
 
-
 export class Path{
     public readonly components: Array<string>;
 
     public static parse(raw: string): Path{
-        if(!raw.startsWith("/")){
-            throw Error(`Path '${raw}' is not absolute`)
-        }
         return new Path({components: raw.split("/")})
     }
 
