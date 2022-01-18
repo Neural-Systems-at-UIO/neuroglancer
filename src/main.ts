@@ -18,6 +18,7 @@
  * @file Main entry point for default neuroglancer viewer.
  */
 
+import "neuroglancer/util/fetch_wrapper"; //handles fetch requests to data-proxy buckets
 
 import {setupDefaultViewer} from 'neuroglancer/ui/default_viewer_setup';
 import {ILASTIK_URL} from 'neuroglancer/ilastik_api_url';
