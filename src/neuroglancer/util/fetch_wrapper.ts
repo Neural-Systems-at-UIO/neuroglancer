@@ -16,10 +16,7 @@ var ebrains_user_access_token: string | undefined = undefined
 const __origFetch = self.fetch;
 export const hijackedFetch = async (input: RequestInfo, init?: RequestInit) => {
     const url = Url.parse(typeof input === "string" ? input : input.destination)
-    if(
-        url.hostname !== "data-proxy.ebrains.eu" ||
-        !url.path.raw.startsWith("/api/")
-    ){
+    if(!url.raw.startsWith("https://data-proxy.ebrains.eu/api/")){
         return __origFetch(input, init);
     }
 
@@ -44,9 +41,19 @@ export const hijackedFetch = async (input: RequestInfo, init?: RequestInit) => {
     }else{
         fixedHeaders = {...headers, [authHeaderName]: authHeaderValue}
     }
-    const responsePromise = __origFetch(input, {...init, headers: fixedHeaders});
 
-    if(url.path.name == "stat" || init && init.method && init.method.toLowerCase() !== "get"){
+    let http_method = (init && init.method && init.method.toUpperCase()) || "GET";
+
+    let fixedInput: RequestInfo
+    if(http_method == "GET" && url.path.raw.startsWith("/api/buckets/")){
+        fixedInput = url.updatedWith({extra_search: new Map([["redirect", "false"]])}).raw
+    }else{
+        fixedInput = input
+    }
+
+    const responsePromise = __origFetch(fixedInput, {...init, headers: fixedHeaders});
+
+    if(url.path.name == "stat"){
         return responsePromise
     }
 
