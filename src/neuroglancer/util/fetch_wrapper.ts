@@ -45,7 +45,7 @@ export const hijackedFetch = async (input: RequestInfo, init?: RequestInit) => {
     let http_method = (init && init.method && init.method.toUpperCase()) || "GET";
 
     let fixedInput: RequestInfo
-    if(http_method == "GET" && url.path.raw.startsWith("/api/buckets/")){
+    if(http_method == "GET" && (url.path.raw.startsWith("/api/buckets/") || url.path.raw.startsWith("/api/v1/buckets/")) ){
         fixedInput = url.updatedWith({extra_search: new Map([["redirect", "false"]])}).raw
     }else{
         fixedInput = input
