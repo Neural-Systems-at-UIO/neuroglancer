@@ -25,7 +25,7 @@ import {ILASTIK_URL} from 'neuroglancer/ilastik_api_url';
 import { Url } from './neuroglancer/util/url';
 
 window.addEventListener('DOMContentLoaded', () => {
-  setupDefaultViewer();
+  setupDefaultViewer({showLayerDialog: false});
 
 
   (window as any).ilastik_debug=false;

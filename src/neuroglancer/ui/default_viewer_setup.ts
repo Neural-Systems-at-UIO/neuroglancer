@@ -19,12 +19,13 @@ import {bindDefaultCopyHandler, bindDefaultPasteHandler} from 'neuroglancer/ui/d
 import {setDefaultInputEventBindings} from 'neuroglancer/ui/default_input_event_bindings';
 import {makeDefaultViewer} from 'neuroglancer/ui/default_viewer';
 import {UrlHashBinding} from 'neuroglancer/ui/url_hash_binding';
+import { ViewerOptions } from '../viewer';
 
 /**
  * Sets up the default neuroglancer viewer.
  */
-export function setupDefaultViewer() {
-  let viewer = (<any>window)['viewer'] = makeDefaultViewer();
+export function setupDefaultViewer(options?: Partial<ViewerOptions>) {
+  let viewer = (<any>window)['viewer'] = makeDefaultViewer(options);
   setDefaultInputEventBindings(viewer.inputEventBindings);
 
   const hashBinding = viewer.registerDisposer(new UrlHashBinding(viewer.state));
