@@ -25,7 +25,12 @@ import {ILASTIK_URL} from 'neuroglancer/ilastik_api_url';
 import { Url } from './neuroglancer/util/url';
 
 window.addEventListener('DOMContentLoaded', () => {
-  setupDefaultViewer({showLayerDialog: false});
+  setupDefaultViewer({
+    showLayerDialog: false,
+    showHelpButton: false,
+    showEditStateButton: false,
+    showAnnotationToolStatus: false,
+  });
 
 
   (window as any).ilastik_debug=false;
