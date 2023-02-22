@@ -26,6 +26,7 @@ import { Url } from './neuroglancer/util/url';
 
 window.addEventListener('DOMContentLoaded', () => {
   setupDefaultViewer({
+    showLayerPanel: false,
     showLayerDialog: false,
     showHelpButton: false,
     showEditStateButton: false,
