@@ -13,7 +13,7 @@
     "sourceMap": true,
     "moduleResolution": "node",
     "incremental": true,
-    "target": "ES2017",
+    "target": "ES2018",
     "newLine": "LF",
     "baseUrl": ".",
     "paths": {

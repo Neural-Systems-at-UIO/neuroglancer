@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import "neuroglancer/util/fetch_wrapper"; //handles fetch requests to data-proxy buckets
 import {CANCELED, CancellationToken, uncancelableToken} from 'neuroglancer/util/cancellation';
 import {Uint64} from 'neuroglancer/util/uint64';
 

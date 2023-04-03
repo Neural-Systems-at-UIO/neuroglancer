@@ -38,6 +38,7 @@ import {mat4, vec3} from 'neuroglancer/util/geom';
 import {completeHttpPath} from 'neuroglancer/util/http_path_completion';
 import {isNotFoundError, responseJson} from 'neuroglancer/util/http_request';
 import {parseArray, parseFixedLengthArray, parseQueryStringParameters, unparseQueryStringParameters, verifyEnumString, verifyFiniteFloat, verifyFinitePositiveFloat, verifyInt, verifyObject, verifyObjectProperty, verifyOptionalObjectProperty, verifyOptionalString, verifyPositiveInt, verifyString, verifyStringArray, verifyOptionalBoolean} from 'neuroglancer/util/json';
+import { Url } from 'neuroglancer/util/url';
 import * as matrix from 'neuroglancer/util/matrix';
 import {getObjectId} from 'neuroglancer/util/object_id';
 import {cancellableFetchSpecialOk, parseSpecialUrl, SpecialProtocolCredentials, SpecialProtocolCredentialsProvider} from 'neuroglancer/util/special_protocol_request';
@@ -63,17 +64,7 @@ class PrecomputedSkeletonSource extends
 }
 
 export function resolvePath(a: string, b: string) {
-  const outputParts = a.split('/');
-  for (const part of b.split('/')) {
-    if (part === '..') {
-      if (outputParts.length !== 0) {
-        outputParts.length = outputParts.length - 1;
-        continue;
-      }
-    }
-    outputParts.push(part);
-  }
-  return outputParts.join('/');
+  return Url.parse(a).joinPath(b).raw
 }
 
 class ScaleInfo {
