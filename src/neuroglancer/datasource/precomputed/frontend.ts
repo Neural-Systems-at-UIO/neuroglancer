@@ -130,7 +130,7 @@ export interface MultiscaleVolumeInfo {
   modelSpace: CoordinateSpace;
 }
 
-export function parseMultiscaleVolumeInfo(obj: unknown): MultiscaleVolumeInfo {
+export function parseMultiscaleVolumeInfo(obj: unknown, selectedResolution?: [number, number, number]): MultiscaleVolumeInfo {
   verifyObject(obj);
   const dataType = verifyObjectProperty(obj, 'data_type', x => verifyEnumString(x, DataType));
   const numChannels = verifyObjectProperty(obj, 'num_channels', verifyPositiveInt);
@@ -138,8 +138,11 @@ export function parseMultiscaleVolumeInfo(obj: unknown): MultiscaleVolumeInfo {
   const mesh = verifyObjectProperty(obj, 'mesh', verifyOptionalString);
   const skeletons = verifyObjectProperty(obj, 'skeletons', verifyOptionalString);
   const segmentPropertyMap = verifyObjectProperty(obj, 'segment_properties', verifyOptionalString);
-  const scaleInfos =
+  let scaleInfos =
       verifyObjectProperty(obj, 'scales', x => parseArray(x, y => new ScaleInfo(y, numChannels)));
+  if(selectedResolution){
+    scaleInfos = scaleInfos.filter(si => selectedResolution.every((value, index) => si.resolution[index] == value))
+  }
   if (scaleInfos.length === 0) throw new Error('Expected at least one scale');
   const baseScale = scaleInfos[0];
   const rank = (numChannels === 1) ? 3 : 4;
@@ -507,7 +510,16 @@ function getSubsourceToModelSubspaceTransform(info: MultiscaleVolumeInfo) {
 async function getVolumeDataSource(
     options: GetDataSourceOptions, credentialsProvider: SpecialProtocolCredentialsProvider,
     url: string, metadata: any): Promise<DataSource> {
-  const info = parseMultiscaleVolumeInfo(metadata);
+  const parsedUrl = Url.parse(url);
+  let selectedResolution: undefined | [number, number, number] = undefined;
+  if(parsedUrl.hash){
+    const match = parsedUrl.hash.match(/^resolution=(?<resolution_string>\d+_\d+_\d+\b)/);
+    if(match){
+      let resolution = match.groups!["resolution_string"].split("_").map(s => parseInt(s))
+      selectedResolution = [resolution[0], resolution[1], resolution[2]]
+    }
+  }
+  const info = parseMultiscaleVolumeInfo(metadata, selectedResolution);
   const volume = new PrecomputedMultiscaleVolumeChunkSource(
       options.chunkManager, credentialsProvider, url, info);
   const {modelSpace} = info;
@@ -932,7 +944,7 @@ export class PrecomputedDataSource extends DataSourceProvider {
   get(options: GetDataSourceOptions): Promise<DataSource> {
     const {url: providerUrl, parameters} = parseProviderUrl(options.providerUrl);
     return options.chunkManager.memoize.getUncounted(
-        {'type': 'precomputed:get', providerUrl, parameters}, async(): Promise<DataSource> => {
+        {'type': 'precomputed:get', providerUrl: options.providerUrl, parameters}, async(): Promise<DataSource> => {
           const {url, credentialsProvider} =
               parseSpecialUrl(providerUrl, options.credentialsManager);
           let metadata: any;
@@ -965,7 +977,7 @@ export class PrecomputedDataSource extends DataSourceProvider {
                   options, credentialsProvider, url, metadata);
             case 'neuroglancer_multiscale_volume':
             case undefined:
-              return await getVolumeDataSource(options, credentialsProvider, url, metadata);
+              return await getVolumeDataSource(options, credentialsProvider, options.providerUrl, metadata);
             default:
               throw new Error(`Invalid type: ${JSON.stringify(t)}`);
           }
