@@ -16,22 +16,27 @@
 
 import {WithParameters} from 'neuroglancer/chunk_manager/backend';
 import {WithSharedCredentialsProviderCounterpart} from 'neuroglancer/credentials_provider/shared_counterpart';
-import {ImageTileEncoding, ImageTileSourceParameters} from 'neuroglancer/datasource/deepzoom/base';
+import {ImageTileSourceParameters} from 'neuroglancer/datasource/deepzoom/base';
 import {VolumeChunk, VolumeChunkSource} from 'neuroglancer/sliceview/volume/backend';
 import {CancellationToken} from 'neuroglancer/util/cancellation';
-import {isNotFoundError, responseArrayBuffer} from 'neuroglancer/util/http_request';
-import {cancellableFetchSpecialOk, SpecialProtocolCredentials} from 'neuroglancer/util/special_protocol_request';
+import {isNotFoundError} from 'neuroglancer/util/http_request';
+import {SpecialProtocolCredentials} from 'neuroglancer/util/special_protocol_request';
 import {registerSharedObject} from 'neuroglancer/worker_rpc';
 import {decodeJpeg} from 'src/neuroglancer/async_computation/decode_jpeg_request';
 import {decodePng} from 'src/neuroglancer/async_computation/decode_png_request';
 import {requestAsyncComputation} from 'src/neuroglancer/async_computation/request';
 import {transposeArray2d} from 'src/neuroglancer/util/array';
+import { DziAccessor, ZippedDziAccessor } from './dzi_accessor';
 
 /* This is enough if support for these aren't needed:
  * - Firefox before 105 (OffscreenCanvas, 2022-09-20)
  * - Safari before 16.4 (OffscreenCanvas, 2023-03-27)
  */
 // declare var OffscreenCanvas: any; // shutting up some outdated compiler(?)
+
+function assertUnreachable(x: never){
+  throw new Error(`This should never happen!: ${x}`)
+}
 
 @registerSharedObject() export class DeepzoomImageTileSource extends
 (WithParameters(WithSharedCredentialsProviderCounterpart<SpecialProtocolCredentials>()(VolumeChunkSource), ImageTileSourceParameters)) {
@@ -69,43 +74,44 @@ import {transposeArray2d} from 'src/neuroglancer/util/array';
     // }
     // Todo: ^ "transposeArray2d" likely does the same
 
-    const {tilesize, overlap, encoding} = parameters;
+    const rawAccessor = parameters.rawAccessor
+    const dziAccessor = "archive" in rawAccessor ? ZippedDziAccessor.fromJsonValue(rawAccessor) : DziAccessor.fromJsonValue(rawAccessor)
+    const dziImageElement = dziAccessor.dziImageElement
+
     const [x, y] = chunk.chunkGridPosition;
-    const ox = x === 0 ? 0 : overlap;
-    const oy = y === 0 ? 0 : overlap;
-    const url = `${parameters.url}/${x}_${y}.${parameters.format}`;
+    const ox = x === 0 ? 0 : dziImageElement.overlap;
+    const oy = y === 0 ? 0 : dziImageElement.overlap;
     try {
-      const responseBuffer = await cancellableFetchSpecialOk(
-          this.credentialsProvider, url, {}, responseArrayBuffer, cancellationToken);
+      const responseBufferUint8 = await dziAccessor.fetchTile({level: parameters.levelIndex, column: x, row: y})
+      if(responseBufferUint8 instanceof Error){ throw responseBufferUint8 }
+      const responseBuffer = responseBufferUint8.buffer
 
       let tilewidth = 0, tileheight = 0;
       let tiledata: Uint8Array|undefined;
-      switch(encoding){
-        case ImageTileEncoding.PNG:
-          const pngbitmap = await requestAsyncComputation(
-              decodePng, cancellationToken, [responseBuffer],
-              new Uint8Array(responseBuffer), undefined, undefined, 3, 1, false
-          );
-          ({width: tilewidth, height: tileheight} = pngbitmap);
-          tiledata = transposeArray2d(pngbitmap.uint8Array, tilewidth * tileheight, 3);
-          break;
-
-        case ImageTileEncoding.JPG:
-        case ImageTileEncoding.JPEG:
-            const jpegbitmap = await requestAsyncComputation(
-                decodeJpeg, cancellationToken, [responseBuffer],
-                new Uint8Array(responseBuffer), undefined, undefined, 3, false);
-            ({uint8Array: tiledata, width: tilewidth, height: tileheight} = jpegbitmap);
-          break;
+      if(dziImageElement.format == "png"){
+        const pngbitmap = await requestAsyncComputation(
+          decodePng, cancellationToken, [responseBuffer],
+          new Uint8Array(responseBuffer), undefined, undefined, 3, 1, false
+        );
+        ({width: tilewidth, height: tileheight} = pngbitmap);
+        tiledata = transposeArray2d(pngbitmap.uint8Array, tilewidth * tileheight, 3);
+      }else if(dziImageElement.format == "jpeg" || dziImageElement.format == "jpg"){
+        const jpegbitmap = await requestAsyncComputation(
+          decodeJpeg, cancellationToken, [responseBuffer],
+          new Uint8Array(responseBuffer), undefined, undefined, 3, false
+        );
+        ({uint8Array: tiledata, width: tilewidth, height: tileheight} = jpegbitmap);
+      }else{
+        assertUnreachable(dziImageElement.format)
       }
       if(tiledata !== undefined) {
-        const t2 = tilesize * tilesize;
+        const t2 = dziImageElement.tileSize * dziImageElement.tileSize;
         const twh = tilewidth * tileheight;
         const d = chunk.data = new Uint8Array(t2 * 3);
         for(let k = 0; k < 3; k++)
           for(let j = 0; j < tileheight; j++)
             for(let i = 0; i < tilewidth; i++)
-              d[i + j * tilesize + k * t2] = tiledata[i + ox + (j + oy) * tilewidth + k * twh];
+              d[i + j * dziImageElement.tileSize + k * t2] = tiledata[i + ox + (j + oy) * tilewidth + k * twh];
       }
     } catch (e) {
       if (!isNotFoundError(e)) throw e;

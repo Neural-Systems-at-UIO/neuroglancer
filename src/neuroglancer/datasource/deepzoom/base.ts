@@ -14,18 +14,11 @@
  * limitations under the License.
  */
 
-export enum ImageTileEncoding {
-  JPG,
-  JPEG,
-  PNG
-}
+import { DziAccessor, ZippedDziAccessor } from "./dzi_accessor";
 
 export class ImageTileSourceParameters {
-  url: string;
-  encoding: ImageTileEncoding;
-  format: string;
-  tilesize: number;
-  overlap: number;
+  rawAccessor: ReturnType<DziAccessor["toJsonValue"]> | ReturnType<ZippedDziAccessor["toJsonValue"]>
+  levelIndex: number
 
   static RPC_ID = 'deepzoom/ImageTileSource';
 }

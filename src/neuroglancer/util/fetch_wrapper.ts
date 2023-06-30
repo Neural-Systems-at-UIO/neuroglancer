@@ -9,7 +9,7 @@
  * FIXME: try to replace this with a service worker
  */
 
-import { Url } from "./url";
+import { mergeHeaders, Url } from "./url";
 
 var ebrains_user_access_token: string | undefined = undefined
 
@@ -25,53 +25,45 @@ const fetchUserToken = async (): Promise<string> => {
 
 export const hijackedFetch = async (input: RequestInfo, init?: RequestInit): Promise<Response> => {
     const url = Url.parse(typeof input === "string" ? input : input.destination)
-    if(!url.raw.startsWith("https://data-proxy.ebrains.eu/api/")){
+    if(url.raw.startsWith("https://data-proxy.ebrains.eu/api/")){
+        return fetchtFromDataProxy({url, init})
+    }else{
         return __origFetch(input, init);
     }
+};
 
-    if(ebrains_user_access_token === undefined){
+async function fetchtFromDataProxy({url, init, unauthorizedRetry=false}: {url: Url, init?: RequestInit, unauthorizedRetry?: boolean}): Promise<Response>{
+    if(ebrains_user_access_token === undefined || unauthorizedRetry){
         ebrains_user_access_token = await fetchUserToken()
     }
+    let httpMethod = init?.method?.toUpperCase() || "GET";
 
-    let headers: HeadersInit | undefined = init === undefined ? undefined :  init.headers
-    let fixedHeaders: {[key:string]: string} = {}
-    if(Array.isArray(headers)){
-        headers.forEach(header => fixedHeaders[header[0]] = header[1])
-    }else if(headers instanceof Headers){
-        for(let header of headers.entries()){
-            fixedHeaders[header[0]] = header[1]
-        }
-    }else if(headers !== undefined){
-        fixedHeaders = {...fixedHeaders, ...headers}
-    }
-    fixedHeaders["Authorization"] = `Bearer ${ebrains_user_access_token}`
-
-    let http_method = (init && init.method && init.method.toUpperCase()) || "GET";
-
-    let fixedInput: RequestInfo
-    if(http_method == "GET" && (url.path.raw.startsWith("/api/buckets/") || url.path.raw.startsWith("/api/v1/buckets/")) ){
-        fixedInput = url.updatedWith({extra_search: new Map([["redirect", "false"]])}).raw
-    }else{
-        fixedInput = input
+    let fixedUrl: Url = url
+    if((httpMethod == "GET" || httpMethod == "HEAD") && (url.path.raw.startsWith("/api/buckets/") || url.path.raw.startsWith("/api/v1/buckets/")) ){
+        fixedUrl = url.updatedWith({extra_search: new Map([["redirect", "false"]])})
     }
 
-    let response = await __origFetch(fixedInput, {...init, headers: fixedHeaders});
-    if(response.status == 401){
-        ebrains_user_access_token = await fetchUserToken();
-        fixedHeaders["Authorization"] = `Bearer ${ebrains_user_access_token}`
-        response = await __origFetch(fixedInput, {...init, headers: fixedHeaders});
+    let fixedHeaders = mergeHeaders(init?.headers, new Headers({"Authorization": `Bearer ${ebrains_user_access_token}`}))
+    fixedHeaders.delete("range")
+
+    let response = await __origFetch(fixedUrl.raw, {
+        ...init,
+        method: httpMethod == "HEAD" ? "GET" : httpMethod,
+        headers: fixedHeaders,
+    });
+
+    if(response.status == 401 && !unauthorizedRetry){
+        return fetchtFromDataProxy({url, init, unauthorizedRetry: true})
     }
 
-    if(url.path.name == "stat"){
+    if(!response.ok || url.path.name == "stat"){
         return response
     }
 
-    if(!response.ok){
-        return response
-    }
     const response_payload = await response.json();
     const cscsObjectUrl = response_payload["url"]
-    return await __origFetch(cscsObjectUrl)
-};
+    const resp =  await __origFetch(cscsObjectUrl, init)
+    return resp
+}
 
 self.fetch = hijackedFetch

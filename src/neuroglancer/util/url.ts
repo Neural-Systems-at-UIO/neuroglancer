@@ -1,4 +1,4 @@
-export const data_schemes = ["precomputed"] as const;
+export const data_schemes = ["precomputed", "deepzoom"] as const;
 export type DataScheme = typeof data_schemes[number];
 export function ensureDataScheme(value: string): DataScheme{
     const variant = data_schemes.find(variant => variant === value)
@@ -241,4 +241,26 @@ export class Url{
     public toString(): string{
         return this.raw
     }
+}
+
+export function mergeHeaders(h1: RequestInit["headers"], h2: RequestInit["headers"]): Headers{
+    let out = new Headers()
+    for(let headers of [h1, h2]){
+        if(headers === undefined){
+            continue
+        }else if(headers instanceof Array){
+            for(let [key, value] of headers){
+                out.set(key, value)
+            }
+        }else if(headers instanceof Headers){
+            for(let [key, value] of headers.entries()){
+                out.set(key, value)
+            }
+        }else{
+            for(let key in headers){
+                out.set(key, headers[key])
+            }
+        }
+    }
+    return out
 }
