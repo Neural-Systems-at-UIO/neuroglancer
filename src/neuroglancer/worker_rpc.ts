@@ -106,7 +106,7 @@ export class RPC {
       if (DEBUG_MESSAGES) {
         console.log('Received message', data);
       }
-      handlers.get(data.functionName)!.call(this, data);
+      handlers.get(data.functionName)?.call(this, data);
     };
   }
 

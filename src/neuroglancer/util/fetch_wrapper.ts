@@ -9,19 +9,66 @@
  * FIXME: try to replace this with a service worker
  */
 
+import { ILASTIK_URL } from "../ilastik_api_url";
 import { mergeHeaders, Url } from "./url";
 
-var ebrains_user_access_token: string | undefined = undefined
+type AuthHeaders = {"Authorization": string, "X-Authorization-Refresh": string};
+
+function _readHeaders(): AuthHeaders | Promise<AuthHeaders>{
+    return (self as any).ebrains_auth_extra_headers
+}
+function _writeHeaders(headers: AuthHeaders | Promise<AuthHeaders>): AuthHeaders | Promise<AuthHeaders>{
+    return (self as any).ebrains_auth_extra_headers = headers
+}
+
+async function getHeaders(refresh: "refresh" | undefined = undefined): Promise<AuthHeaders>{
+    const headers = _readHeaders()
+    if(!refresh || headers instanceof Promise){
+        return headers
+    }
+    console.log("==>>> Asking webilastik for a refreshed token....");
+    return _writeHeaders((async () => {
+        const refreshedTokenResponse = await fetch(
+            Url.parse(ILASTIK_URL).joinPath("api/refresh_token").raw,
+            {
+                cache: "no-store",
+                method: "POST",
+                headers: await getHeaders(),
+            },
+        )
+        if(!refreshedTokenResponse.ok){
+            console.error("Could not refresh ebrains token!!!!!!!!!!!!!!!!")
+            throw "Could not refresh ebrains token!!!!!!!!!!!!!!!!"
+        }
+        return makeHeaders(await refreshedTokenResponse.json())
+    })());
+}
+
+function makeHeaders(token: any): AuthHeaders{
+    const access_token = token.access_token
+    const refresh_token = token.refresh_token
+    if(typeof access_token != "string" || typeof refresh_token != "string"){
+        console.error(`Bad access/refresh token!!!!!!!!!!!!!!!!`)
+        throw `Bad access/refresh token!!!!!!!!!!!!!!!!}`
+    }
+    return {
+        "Authorization": `Bearer ${token.access_token}`,
+        "X-Authorization-Refresh": token.refresh_token,
+    }
+}
+
+globalThis.addEventListener("message", (ev: MessageEvent): boolean => {
+    const payload = ev.data;
+    const access_token_key = "access_token"
+    if(typeof(payload) != "object" || !(access_token_key in payload) ){
+        return true
+    }
+    console.log(`NEUROGLANCER: ${typeof Window == "function" ? 'window' : 'worker'} just got a token as a message!`)
+    _writeHeaders(makeHeaders(payload));
+    return true
+})
 
 const __origFetch = self.fetch;
-
-const fetchUserToken = async (): Promise<string> => {
-    const token_response = await __origFetch("https://app.ilastik.org/api/get_ebrains_token", {method: "POST"})
-    if(!token_response.ok){
-        throw TypeError(await token_response.text())
-    }
-    return (await token_response.json())["ebrains_user_access_token"]
-}
 
 export const hijackedFetch = async (input: RequestInfo, init?: RequestInit): Promise<Response> => {
     const url = Url.parse(typeof input === "string" ? input : input.destination)
@@ -33,9 +80,7 @@ export const hijackedFetch = async (input: RequestInfo, init?: RequestInit): Pro
 };
 
 async function fetchtFromDataProxy({url, init, unauthorizedRetry=false}: {url: Url, init?: RequestInit, unauthorizedRetry?: boolean}): Promise<Response>{
-    if(ebrains_user_access_token === undefined || unauthorizedRetry){
-        ebrains_user_access_token = await fetchUserToken()
-    }
+    const extra_headers = await getHeaders(unauthorizedRetry ? "refresh" : undefined)
     let httpMethod = init?.method?.toUpperCase() || "GET";
 
     let fixedUrl: Url = url
@@ -43,7 +88,11 @@ async function fetchtFromDataProxy({url, init, unauthorizedRetry=false}: {url: U
         fixedUrl = url.updatedWith({extra_search: new Map([["redirect", "false"]])})
     }
 
-    let fixedHeaders = mergeHeaders(init?.headers, new Headers({"Authorization": `Bearer ${ebrains_user_access_token}`}))
+    const authorization_header_key = "Authorization"
+    let fixedHeaders = mergeHeaders(
+        init?.headers,
+        {[authorization_header_key]: extra_headers[authorization_header_key]}
+    )
     fixedHeaders.delete("range")
 
     let response = await __origFetch(fixedUrl.raw, {
