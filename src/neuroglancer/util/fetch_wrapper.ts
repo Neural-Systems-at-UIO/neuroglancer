@@ -130,17 +130,24 @@ async function fetchtFromDataProxy({
   const response_payload = await response.json();
   const cscsObjectUrl = response_payload["url"];
 
-  // Create a mutable copy of the original request options.
-  const finalInit = { ...init };
+  // Determine the HTTP method to use for the presigned URL request - CSCS change
+  const presignedMethod = init?.method?.toUpperCase() === "HEAD" ? "GET" : (init?.method || "GET");
 
-  // If the original method was HEAD, change it to GET for the final S3 request.
-  // This avoids a CORS preflight failure on the S3 bucket, which may not be
-  // configured to allow HEAD requests from this origin.
-  if (finalInit.method?.toUpperCase() === "HEAD") {
-    finalInit.method = "GET";
+  // and additional headers cause 403 errors after object storage migration - Reported by Hassan
+  const resp = await __origFetch(cscsObjectUrl, {
+    method: presignedMethod,
+    // Explicitly omit all headers and other init options - Changed due to CSCS
+  });
+
+  // For HEAD requests, return response with headers but no body
+  if (init?.method?.toUpperCase() === "HEAD") {
+    return new Response(null, {
+      status: resp.status,
+      statusText: resp.statusText,
+      headers: resp.headers,
+    });
   }
 
-  const resp = await __origFetch(cscsObjectUrl, finalInit);
   return resp;
 }
 
